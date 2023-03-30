@@ -15,12 +15,33 @@ Vagrant.configure("2") do |config|
   config.vm.box = "debian/bullseye64"
   config.vm.provision "shell", inline: <<-SHELL
 	sudo apt-get -q update
-	sudo apt-get -q -y install apache2
 	sudo apt-get -q -y install php
+	sudo apt install -y mariadb-server mariadb-client
+	SHELL
+	
+  config.vm.provision "shell", inline: <<-SHELL
+	wget https://repo.zabbix.com/zabbix/6.4/debian/pool/main/z/zabbix-release/zabbix-release_6.4-1+debian11_all.deb
+    	dpkg -i zabbix-release_6.4-1+debian11_all.deb
+    	apt update
+    	apt install -y zabbix-server-mysql zabbix-frontend-php zabbix-apache-conf zabbix-sql-scripts zabbix-agent
 	SHELL
 
   config.vm.provision "shell", inline: <<-SHELL
-	sudo apt install -y mariadb-server mariadb-client
+  	mysql -u root -e 'create database zabbix character set utf8mb4 collate utf8mb4_bin;'
+    	mysql -u root -e 'create user zabbix@localhost identified by "zabbix";'
+    	mysql -u root -e 'grant all privileges on zabbix.* to zabbix@localhost;'
+    	mysql -u root -e 'set global log_bin_trust_function_creators = 1;'
+    	zcat /usr/share/zabbix-sql-scripts/mysql/server.sql.gz | mysql --default-character-set=utf8mb4 -u zabbix -pzabbix zabbix
+    	mysql -u root -e 'set global log_bin_trust_function_creators = 0;'
+    	echo "DBPassword=zabbix" >> /etc/zabbix/zabbix_server.conf
+	SHELL
+	
+  config.vm.provision "shell", inline: <<-SHELL
+  	echo "en_US.UTF-8 UTF-8" > /etc/locale.gen
+    	echo "pt_BR.UTF-8 UTF-8" > /etc/locale.gen
+   	locale-gen
+    	systemctl restart zabbix-server zabbix-agent apache2
+    	systemctl enable zabbix-server zabbix-agent apache2
 	SHELL
   # Disable automatic box update checking. If you disable this, then
   # boxes will only be checked for updates when the user runs
